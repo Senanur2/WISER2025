@@ -1,0 +1,36 @@
+
+if length(ARGS) < 1
+    println("Usage: julia dotProduct.jl <array_size>")
+    exit(1)
+end
+
+
+n = parse(Int, ARGS[1])
+
+
+u = collect(1:n)
+v = collect(1:n)
+
+
+sum_elementwise = u .+ v
+println("\nElement-wise sum:")
+println(sum_elementwise)
+
+
+function dot_product(u, v)
+    dot_result = 0
+    for i in 1:length(u)
+        dot_result += u[i] * v[i]
+    end
+    return dot_result
+end
+
+
+println("\nDot product (using loop):")
+println(dot_product(u, v))
+
+#println("\nArray u (size = $(length(u))):")
+#println(u[1:min(end, 10)])  # show first 10 elements max
+
+#println("\nArray v (size = $(length(v))):")
+#println(v[1:min(end, 10)])  # show first 10 elements max
