@@ -1,0 +1,49 @@
+using BenchmarkTools
+using Statistics
+
+if length(ARGS) != 3
+    println("Usage: julia matrixBench.jl <rowsA> <sharedDim> <colsB>")
+    exit(1)
+end
+
+rowsA = parse(Int, ARGS[1])
+sharedDim = parse(Int, ARGS[2])
+colsB = parse(Int, ARGS[3])
+
+function matrix_multiply(A, B)
+    m, nA = size(A)
+    nB, p = size(B)
+
+    if nA != nB
+        println("Error: Number of columns in A must equal number of rows in B.")
+        return nothing
+    end
+
+    C = zeros(m, p)
+
+ for i in 1:m
+         for j in 1:p
+            for k in 1:nA
+                C[i, j] += A[i, k] * B[k, j]
+            end
+        end
+    end
+
+    return C
+end
+ 
+
+A = rand(Float64, rowsA, sharedDim)
+B = rand(Float64, sharedDim, colsB)
+
+matrix_multip = A * B
+
+t_custom = @benchmark matrix_multiply($A, $B) samples=10
+avg_custom = mean(t_custom).time / 1e9
+
+println("Custom implementation: ", round(avg_custom, digits=6), " s")
+
+t_builtin = @benchmark $A * $B samples=10
+avg_builtin = mean(t_builtin).time / 1e9
+
+println("Built-in implementation: ", round(avg_builtin, digits=6), " s")
