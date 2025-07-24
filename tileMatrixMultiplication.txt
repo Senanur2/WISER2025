@@ -1,0 +1,50 @@
+using LinearAlgebra
+using BenchmarkTools
+
+
+if length(ARGS) < 2
+    println("Usage: julia tile_mult.jl <matrix_size> <tile_size>")
+    exit(1)
+end
+
+n = parse(Int, ARGS[1])
+tile_size = parse(Int, ARGS[2])
+
+
+A = randn(n, n)
+B = randn(n, n)
+C = zeros(n, n)
+
+
+function tile_multiply!(C, A, B, tile_size)
+    n = size(A, 1)
+    for ii in 1:tile_size:n
+        for jj in 1:tile_size:n
+            for kk in 1:tile_size:n
+                i_max = min(ii+tile_size-1, n)
+                j_max = min(jj+tile_size-1, n)
+                k_max = min(kk+tile_size-1, n)
+
+                for i in ii:i_max
+                    for j in jj:j_max
+                        for k in kk:k_max
+                            C[i, j] += A[i, k] * B[k, j]
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
+time = @belapsed tile_multiply!($C, $A, $B, $tile_size)
+
+
+flops = 2 * n^3  
+gflops = flops / (time * 1e9)
+
+println("Matrix size: $n x $n")
+println("Tile size: $tile_size")
+println("Time taken: $(round(time*1000, digits=2)) ms")
+println("Performance: $(round(gflops, digits=2)) GFLOP/s")

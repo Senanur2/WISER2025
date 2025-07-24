@@ -1,0 +1,49 @@
+using BenchmarkTools
+
+if length(ARGS) < 2
+    println("Usage: julia vector_matrix_mul.jl <m> <n>")
+    exit(1)
+end
+
+m = parse(Int, ARGS[1])
+n = parse(Int, ARGS[2])
+
+A = [i + j for i in 1:m, j in 1:n] 
+x = collect(1.0:n)                 
+
+function vector_matrix_multiply(A, x)
+    m, n = size(A)
+    if length(x) != n
+        error("Matrix columns and vector size must match")
+    end
+
+    result = zeros(Float64, m)
+
+    for i in 1:m
+        for j in 1:n
+            result[i] += A[i, j] * x[j]
+        end
+    end
+
+    return result
+end
+
+# Measure performance
+time = @belapsed vector_matrix_multiply($A, $x)  
+result = vector_matrix_multiply(A, x)
+
+flops = 2 * m * n
+gflops = (flops / time) / 1e9
+
+builtin_result = A * x
+
+println("Matrix size: $m × $n")
+println("Vector size: $n")
+println("FLOPs: $flops")
+println("Time taken: $(round(time * 1000, digits=3)) ms")
+println("Performance: $(round(gflops, digits=3)) GFLOP/s")
+
+println("\nManual and built-in results are equal? ", isapprox(result, builtin_result))
+
+#println("\nResult (manual): ", result)
+#println("Result (built-in): ", builtin_result)
