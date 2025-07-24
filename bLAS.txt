@@ -1,0 +1,38 @@
+using LinearAlgebra
+using BenchmarkTools
+
+
+if length(ARGS) < 3
+    println("Usage: julia blas_gemm.jl <m> <n> <p>")
+    exit(1)
+end
+
+
+m = parse(Int, ARGS[1])  
+n = parse(Int, ARGS[2])  
+p = parse(Int, ARGS[3])  
+
+
+A = rand(Float64, m, n)
+B = rand(Float64, n, p)
+C = zeros(Float64, m, p)
+
+α = 1.0
+β = 0.0
+
+
+BLAS.gemm!('N', 'N', α, A, B, β, C)
+
+
+time = @belapsed BLAS.gemm!('N', 'N', $α, $A, $B, $β, $C)
+
+
+
+flops = 2.0 * m * n * p
+gflops = flops / (time * 1e9)
+
+
+println("Time taken: $(round(time * 1000, digits=3)) ms")
+println("Performance: $(round(gflops, digits=3)) GFLOP/s")
+
+
