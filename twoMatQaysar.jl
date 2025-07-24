@@ -1,6 +1,7 @@
 using BenchmarkTools
 using Statistics
 using Base.Threads
+using LinearAlgebra
 using LinearAlgebra.BLAS
 
 if length(ARGS) != 3
@@ -12,20 +13,14 @@ rowsA = parse(Int, ARGS[1])
 sharedDim = parse(Int, ARGS[2])
 colsB = parse(Int, ARGS[3])
 
-# -------------------------------
-# Manual Threaded Implementation
-# -------------------------------
+A = rand(Float64, rowsA, sharedDim)
+B = rand(Float64, sharedDim, colsB)
+flops = 2 * rowsA * sharedDim * colsB
+
 function threaded_matrix_multiply(A, B)
     m, nA = size(A)
     nB, p = size(B)
-
-    if nA != nB
-        println("Error: Incompatible matrix sizes.")
-        return nothing
-    end
-
     C = zeros(m, p)
-
     @threads for i in 1:m
         for j in 1:p
             sum = 0.0
@@ -35,62 +30,28 @@ function threaded_matrix_multiply(A, B)
             C[i, j] = sum
         end
     end
-
     return C
 end
 
-# -------------------------------
-# BLAS (gemm!)
-# -------------------------------
 function blas_multiply(A, B)
     m, n = size(A)
     n2, p = size(B)
     C = zeros(m, p)
-    alpha = 1.0
-    beta = 0.0
-    gemm!('N', 'N', alpha, A, B, beta, C)  # C = alpha*A*B + beta*C
+    gemm!('N', 'N', 1.0, A, B, 0.0, C)
     return C
 end
 
-# -------------------------------
-# Generate Random Input
-# -------------------------------
-A = rand(Float64, rowsA, sharedDim)
-B = rand(Float64, sharedDim, colsB)
+function print_stats(name, t, flops)
+    avg = mean(t).time / 1e9
+    gflops = flops / (avg * 1e9)
+    println("$name:\tTime = $(round(avg * 1000, digits=3)) ms\tPerformance = $(round(gflops, digits=3)) GFLOP/s")
+end
 
-# Total FLOPs
-flops = 2 * rowsA * sharedDim * colsB
-
-# -------------------------------
-# Benchmark Manual Threaded
-# -------------------------------
 t_manual = @benchmark threaded_matrix_multiply($A, $B) samples=10
-avg_manual = mean(t_manual).time / 1e9  # ns → s
-gflops_manual = flops / (avg_manual * 1e9)
-
-println("\n Manual Threaded Implementation")
-println("Threads used: ", nthreads())
-println("Time taken: ", round(avg_manual, digits=6), " s")
-println("Performance: ", round(gflops_manual, digits=3), " GFLOP/s")
-
-# -------------------------------
-# Benchmark Built-in (*)
-# -------------------------------
 t_builtin = @benchmark $A * $B samples=10
-avg_builtin = mean(t_builtin).time / 1e9
-gflops_builtin = flops / (avg_builtin * 1e9)
-
-println("\n Built-in Julia (A * B)")
-println("Time taken: ", round(avg_builtin, digits=6), " s")
-println("Performance: ", round(gflops_builtin, digits=3), " GFLOP/s")
-
-# -------------------------------
-# Benchmark BLAS gemm!
-# -------------------------------
 t_blas = @benchmark blas_multiply($A, $B) samples=10
-avg_blas = mean(t_blas).time / 1e9
-gflops_blas = flops / (avg_blas * 1e9)
 
-println("\n BLAS gemm! (C = A * B)")
-println("Time taken: ", round(avg_blas, digits=6), " s")
-println("Performance: ", round(gflops_blas, digits=3), " GFLOP/s")
+println("\nMatrix-Matrix Multiplication ($rowsA x $sharedDim) × ($sharedDim x $colsB)")
+print_stats("Manual", t_manual, flops)
+print_stats("Built-in", t_builtin, flops)
+print_stats("BLAS", t_blas, flops)
