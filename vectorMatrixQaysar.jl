@@ -40,16 +40,16 @@ t_blas = @benchmark mul!($(zeros(m)), $A, $x) samples=10  # BLAS under the hood
 
 println("\nVector-Matrix Multiplication ($m x $n)")
 
-print_stats("Manual")
-print_stats(t_manual)
-print_stats(flops)
+println("Manual")
+println(t_manual)
+println(flops)
 
 
-print_stats("Built-in")
-print_stats(t_builtin)
-print_stats(flops)
+println("Built-in")
+println(t_builtin)
+println(flops)
 
 
-print_stats("BLAS")
-print_stats(t_blas)
-print_stats(flops)
+println("BLAS")
+println(t_blas)
+println(flops)
