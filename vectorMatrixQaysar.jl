@@ -1,7 +1,7 @@
 using BenchmarkTools
-using Base.Threads
 using LinearAlgebra
 using Statistics
+using Base.Threads
 
 if length(ARGS) < 2
     println("Usage: julia vector_matrix_mul.jl <m> <n>")
@@ -15,7 +15,7 @@ A = [i + j for i in 1:m, j in 1:n]
 x = collect(1.0:n)
 flops = 2 * m * n
 
-function threaded_vector_matrix_multiply(A, x)
+function manual_vector_matrix_multiply(A, x)
     m, n = size(A)
     result = zeros(Float64, m)
     @threads for i in 1:m
@@ -28,17 +28,38 @@ function threaded_vector_matrix_multiply(A, x)
     return result
 end
 
-function print_stats(name, t, flops)
-    avg = mean(t).time / 1e9
-    gflops = flops / (avg * 1e9)
-    println("$name:\tTime = $(round(avg * 1000, digits=3)) ms\tPerformance = $(round(gflops, digits=3)) GFLOP/s")
-end
+# Run once to get the results for comparison
+result_manual = manual_vector_matrix_multiply(A, x)
+result_builtin = A * x
+result_blas = mul!(zeros(m), A, x)
 
-t_manual = @benchmark threaded_vector_matrix_multiply($A, $x) samples=10
+# Benchmark manual implementation
+t_manual = @benchmark manual_vector_matrix_multiply($A, $x) samples=10
+avg_manual = mean(t_manual).time / 1e9
+gflops_manual = flops / (avg_manual * 1e9)
+
+println("\nManual Implementation:")
+println("Time taken: ", round(avg_manual, digits=6), " s")
+println("Performance: ", round(gflops_manual, digits=3), " GFLOP/s")
+
+# Benchmark built-in implementation
 t_builtin = @benchmark $A * $x samples=10
-t_blas = @benchmark mul!($(zeros(m)), $A, $x) samples=10  # BLAS under the hood
+avg_builtin = mean(t_builtin).time / 1e9
+gflops_builtin = flops / (avg_builtin * 1e9)
 
-println("\nVector-Matrix Multiplication ($m x $n)")
-print_stats("Manual", t_manual, flops)
-print_stats("Built-in", t_builtin, flops)
-print_stats("BLAS", t_blas, flops)
+println("\nBuilt-in Implementation:")
+println("Time taken: ", round(avg_builtin, digits=6), " s")
+println("Performance: ", round(gflops_builtin, digits=3), " GFLOP/s")
+
+# Benchmark BLAS implementation
+t_blas = @benchmark mul!($(zeros(m)), $A, $x) samples=10
+avg_blas = mean(t_blas).time / 1e9
+gflops_blas = flops / (avg_blas * 1e9)
+
+println("\nBLAS Implementation:")
+println("Time taken: ", round(avg_blas, digits=6), " s")
+println("Performance: ", round(gflops_blas, digits=3), " GFLOP/s")
+
+# Check for approximate equality
+equal = isapprox(result_manual, result_builtin; atol=1e-8)
+println("\nManual ≈ Built-in? ", equal ? "true" : "false")
