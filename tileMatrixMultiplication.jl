@@ -17,8 +17,9 @@ C_manual = zeros(n, n)
 C_builtin = zeros(n, n)
 C_blas = zeros(n, n)
 
-# 1️⃣ Manual threaded tile multiplication
+# Manual threaded tile multiplication
 function threaded_tile_multiply!(C, A, B, tile_size)
+  fill!(C, 0.0)
     n = size(A, 1)
     Threads.@threads for ii in 1:tile_size:n
         for jj in 1:tile_size:n
@@ -39,15 +40,15 @@ function threaded_tile_multiply!(C, A, B, tile_size)
     end
 end
 
-# 2️⃣ Benchmark Manual Threaded
+# Benchmark Manual Threaded
 t_manual = @benchmark threaded_tile_multiply!($C_manual, $A, $B, $tile_size) samples=5
 avg_time_manual = mean(t_manual).time / 1e9
 
-# 3️⃣ Benchmark Built-in (A * B)
+# Benchmark Built-in (A * B)
 t_builtin = @benchmark $C_builtin .= $A * $B samples=5
 avg_time_builtin = mean(t_builtin).time / 1e9
 
-# 4️⃣ Benchmark BLAS (mul!)
+# Benchmark BLAS (mul!)
 t_blas = @benchmark mul!($C_blas, $A, $B) samples=5
 avg_time_blas = mean(t_blas).time / 1e9
 
@@ -74,3 +75,9 @@ println("  Performance: $(round(gflops_builtin, digits=2)) GFLOP/s")
 println("BLAS mul!(C, A, B):")
 println("  Time: $(round(avg_time_blas * 1000, digits=2)) ms")
 println("  Performance: $(round(gflops_blas, digits=2)) GFLOP/s")
+
+# Result comparison using isapprox
+println("\n--- Result Accuracy Check (isapprox) ---")
+println("Manual ≈ Built-in? ", isapprox(C_manual, C_builtin; rtol=1e-5, atol=1e-8))
+println("Manual ≈ BLAS?     ", isapprox(C_manual, C_blas; rtol=1e-5, atol=1e-8))
+println("Built-in ≈ BLAS?   ", isapprox(C_builtin, C_blas; rtol=1e-5, atol=1e-8))
