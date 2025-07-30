@@ -22,26 +22,24 @@ C_blas = zeros(n, n)
 
 # Manual threaded tile multiplication
 function threaded_tile_multiply!(C, A, B, tile_size)
-  fill!(C, 0.0)
-    n = size(A, 1)
-    Threads.@threads for ii in 1:tile_size:n
+      fill!(C, 0.0)
+        n = size(A, 1)
+        Threads.@threads for ii in 1:tile_size:n
         for jj in 1:tile_size:n
             for kk in 1:tile_size:n
                 i_max = min(ii+tile_size-1, n)
                 j_max = min(jj+tile_size-1, n)
                 k_max = min(kk+tile_size-1, n)
 
-                for i in ii:i_max
-                    for j in jj:j_max
-                        for k in kk:k_max
-                            C[i, j] += A[i, k] * B[k, j]
-                        end
-                    end
-                end
+                A_sub = A[ii:i_max, kk:k_max]
+                B_sub = B[kk:k_max, jj:j_max]
+                C_sub = C[ii:i_max, jj:j_max]
+
+                BLAS.gemm!('N', 'N', 1.0, A_sub, B_sub, 1.0, C_sub)
             end
         end
     end
-end
+end 
 
 # Benchmark Manual Threaded
 LinearAlgebra.BLAS.set_num_threads(1)
