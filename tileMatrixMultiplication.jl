@@ -11,6 +11,9 @@ end
 n = parse(Int, ARGS[1])
 tile_size = parse(Int, ARGS[2])
 
+blas_threads = length(ARGS) > 2 ? parse(Int, ARGS[3]) : 1
+LinearAlgebra.BLAS.set_num_threads(blas_threads)
+
 A = randn(n, n)
 B = randn(n, n)
 C_manual = zeros(n, n)
