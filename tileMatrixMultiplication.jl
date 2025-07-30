@@ -14,7 +14,7 @@ tile_size = parse(Int, ARGS[2])
 A = randn(n, n)
 B = randn(n, n)
 C_manual = zeros(n, n)
-C_builtin = zeros(n, n)
+#C_builtin = zeros(n, n)
 C_blas = zeros(n, n)
 
 # Manual threaded tile multiplication
@@ -56,7 +56,7 @@ avg_time_blas = mean(t_blas).time / 1e9
 # Performance: FLOPs = 2n³
 flops = 2 * n^3
 gflops_manual = flops / (avg_time_manual * 1e9)
-gflops_builtin = flops / (avg_time_builtin * 1e9)
+#gflops_builtin = flops / (avg_time_builtin * 1e9)
 gflops_blas = flops / (avg_time_blas * 1e9)
 
 # Results
