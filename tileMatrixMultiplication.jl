@@ -42,15 +42,15 @@ end
 
 # Benchmark Manual Threaded
 LinearAlgebra.BLAS.set_num_threads(1)
-t_manual = @benchmark threaded_tile_multiply!($C_manual, $A, $B, $tile_size) samples=5
+t_manual = @benchmark threaded_tile_multiply!($C_manual, $A, $B, $tile_size) samples=10
 avg_time_manual = mean(t_manual).time / 1e9
 
 # Benchmark Built-in (A * B)
-t_builtin = @benchmark $C_builtin .= $A * $B samples=5
+t_builtin = @benchmark $C_builtin .= $A * $B samples=10
 avg_time_builtin = mean(t_builtin).time / 1e9
 
 # Benchmark BLAS (mul!)
-t_blas = @benchmark mul!($C_blas, $A, $B) samples=5
+t_blas = @benchmark mul!($C_blas, $A, $B) samples=10
 avg_time_blas = mean(t_blas).time / 1e9
 
 # Performance: FLOPs = 2n³
