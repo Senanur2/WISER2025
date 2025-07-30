@@ -41,7 +41,7 @@ function threaded_tile_multiply!(C, A, B, tile_size)
 end
 
 # Benchmark Manual Threaded
-#LinearAlgebra.BLAS.set_num_threads(1)
+LinearAlgebra.BLAS.set_num_threads(1)
 t_manual = @benchmark threaded_tile_multiply!($C_manual, $A, $B, $tile_size) samples=10
 avg_time_manual = mean(t_manual).time / 1e9
 
