@@ -46,7 +46,7 @@ t_manual = @benchmark threaded_tile_multiply!($C_manual, $A, $B, $tile_size) sam
 avg_time_manual = mean(t_manual).time / 1e9
 
 # Benchmark Built-in (A * B)
-LinearAlgebra.Buil-in.set_num_threads(1)
+LinearAlgebra.Built-in.set_num_threads(1)
 t_builtin = @benchmark $C_builtin .= $A * $B samples=10
 avg_time_builtin = mean(t_builtin).time / 1e9
 
