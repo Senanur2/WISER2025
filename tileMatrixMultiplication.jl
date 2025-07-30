@@ -2,25 +2,33 @@ using LinearAlgebra
 using BenchmarkTools
 using Base.Threads
 using Statistics
-#get size from command line
-if length(ARGS) < 2
-    println("Usage: julia threaded_tile_blas_benchmark.jl <matrix_size> <tile_size>")
+
+if length(ARGS) < 3
+    println("Usage: julia benchmark.jl <matrix_size> <tile_size> <thread_count>")
     exit(1)
 end
 
-n = parse(Int, ARGS[1])         # Matrix size
-tile_size = parse(Int, ARGS[2]) # Tile size
+n = parse(Int, ARGS[1])
+tile_size = parse(Int, ARGS[2])
+thread_count = parse(Int, ARGS[3])
 
-# Matrix setup 
+# Set BLAS threads
+BLAS.set_num_threads(thread_count)
+
+# Warning if JULIA_NUM_THREADS mismatch
+if nthreads() != thread_count
+    println("Warning: Julia threads $(nthreads()) != requested $thread_count. Set JULIA_NUM_THREADS=$thread_count.")
+end
+
+# Generate matrices
 A = randn(n, n)
 B = randn(n, n)
-C = zeros(n, n)
+C_tile = zeros(n, n)
+C_blas = zeros(n, n)
 
-# Tile-wise threaded BLAS multiply 
 function threaded_tile_blas_multiply!(C, A, B, tile_size)
     fill!(C, 0.0)
     n = size(A, 1)
-
     Threads.@threads for ii in 1:tile_size:n
         for jj in 1:tile_size:n
             for kk in 1:tile_size:n
@@ -38,16 +46,30 @@ function threaded_tile_blas_multiply!(C, A, B, tile_size)
     end
 end
 
+# Benchmarking
+t_tile = @benchmark threaded_tile_blas_multiply!($C_tile, $A, $B, $tile_size) samples=5
+avg_time_tile = mean(t_tile).time / 1e6   
 
-println("Matrix size: $n x $n | Tile size: $tile_size")
+t_blas = @benchmark mul!($C_blas, $A, $B) samples=5
+avg_time_blas = mean(t_blas).time / 1e6    
 
-    # Benchmark
-    t = @benchmark threaded_tile_blas_multiply!($C, $A, $B, $tile_size) samples=10
-    avg_time = mean(t).time / 1e9   # seconds
+flops = 2 * n^3
+gflops_tile = flops / (avg_time_tile * 1e6)
+gflops_blas = flops / (avg_time_blas * 1e6)
 
-    flops = 2 * n^3
-    gflops = flops / (avg_time * 1e9)
+#results
+println("-->Matrix Multiplication Comparison ")
+println("Matrix size: $n x $n")
+println("Tile size: $tile_size")
+println("Threads used: $thread_count\n")
 
-    println("  Avg time: $(round(avg_time * 1000, digits=2)) ms")
-    println("  GFLOP/s:  $(round(gflops, digits=2))")
-end
+println("Tile BLAS:")
+println("  Time: $(round(avg_time_tile, digits=2)) ms")
+println("  Performance: $(round(gflops_tile, digits=2)) GFLOP/s\n")
+
+println("Matrix BLAS: ")
+println("  Time: $(round(avg_time_blas, digits=2)) ms")
+println("  Performance: $(round(gflops_blas, digits=2)) GFLOP/s\n")
+
+println("--- Result Accuracy Check (isapprox) ---")
+println("Manual ≈ BLAS?     ", isapprox(C_tile, C_blas; rtol=1e-5, atol=1e-8))
