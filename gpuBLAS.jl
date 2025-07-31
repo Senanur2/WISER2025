@@ -1,74 +1,72 @@
 using CUDA
 using BenchmarkTools
-using LinearAlgebra
 
-# Custom matrix multiplication kernel
-function matmul_kernel(A, B, C, M, N, K)
-    row = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    col = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-
-    if row <= M && col <= K
-        sum = 0.0f0
-        for n = 1:N
-            sum += A[row, n] * B[n, col]
+# Naive element-wise CUDA kernel for matrix multiplication
+function matmul_naive_kernel(C, A, B, N)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    if i <= N && j <= N
+        sum = zero(eltype(C))
+        for k in 1:N
+            sum += A[i,k] * B[k,j]
         end
-        C[row, col] = sum
+        C[i,j] = sum
     end
     return
 end
 
-
-# Matrix dimensions
-M, N, K = 512, 512, 512
-
-# Allocate matrices on GPU
-A = CUDA.rand(Float32, M, N)
-B = CUDA.rand(Float32, N, K)
-C_custom = CUDA.zeros(Float32, M, K)
-C_builtin = similar(C_custom)
-
-# Threads and blocks
-threads = (16, 16)
-blocks = (cld(K, threads[1]), cld(M, threads[2]))
-
-# Warm up GPU (avoid first-time launch overhead like output u dont like)
-CUDA.@sync begin
-    @cuda threads=threads blocks=blocks matmul_kernel(A, B, C_custom, M, N, K)
+function gpu_matmul_naive(A_d, B_d, N)
+    C_d = CUDA.zeros(Float32, N, N)
+    threads = (16, 16)
+    blocks = (cld(N, threads[1]), cld(N, threads[2]))
+    @cuda threads=threads blocks=blocks matmul_naive_kernel(C_d, A_d, B_d, N)
+    return C_d
 end
 
+function main()
+    N = 1024  # matrix size NxN (adjust as needed)
 
-# Benchmarking the Custom GPU Kernel
-function benchmark_custom()
-    t = @elapsed CUDA.@sync begin
-        @cuda threads=threads blocks=blocks matmul_kernel(A, B, C_custom, M, N, K)
+    # Generate random Float32 matrices on CPU
+    A_h = rand(Float32, N, N)
+    B_h = rand(Float32, N, N)
+
+    # Transfer to GPU
+    A_d = CuArray(A_h)
+    B_d = CuArray(B_h)
+
+    # Warmup
+    C_built_in = A_d * B_d
+    C_naive = gpu_matmul_naive(A_d, B_d, N)
+    synchronize()
+
+    # Benchmark built-in
+    built_in_time = @belapsed begin
+        C_built_in = $A_d * $B_d
+        synchronize()
     end
-    gflops = 2.0 * M * N * K / t / 1e9
-    println("--- Custom GPU Kernel ---")
-    println("Time: $(round(t * 1000, digits=2)) ms")
-    println("Performance: $(round(gflops, digits=2)) GFLOP/s")
-end
 
-
-# Benchmarking the Built-in `mul!`
-function benchmark_builtin()
-    t = @elapsed CUDA.@sync begin
-        CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, A, B, 0.0f0, C_builtin)
+    # Benchmark naive kernel
+    naive_time = @belapsed begin
+        C_naive = gpu_matmul_naive($A_d, $B_d, $N)
+        synchronize()
     end
-    gflops = 2.0 * M * N * K / t / 1e9
-    println("--- Built-in mul! ---")
-    println("Time: $(round(t * 1000, digits=2)) ms")
-    println("Performance: $(round(gflops, digits=2)) GFLOP/s")
+
+    # Calculate GFLOPS
+    flops = 2 * N^3
+    built_in_gflops = flops / (built_in_time * 1e9)
+    naive_gflops = flops / (naive_time * 1e9)
+
+    println("Matrix size: $N x $N")
+    println("Built-in cuBLAS multiply:")
+    println("  Time: $(round(built_in_time*1000, digits=3)) ms")
+    println("  Performance: $(round(built_in_gflops, digits=2)) GFLOP/s")
+    println("Naive element-wise kernel multiply:")
+    println("  Time: $(round(naive_time*1000, digits=3)) ms")
+    println("  Performance: $(round(naive_gflops, digits=2)) GFLOP/s")
+
+    # Optionally verify correctness
+    max_error = maximum(abs.(Array(C_built_in) .- Array(C_naive)))
+    println("Max absolute error between results: $max_error")
 end
 
-# Accuracy Check
-function check_accuracy()
-    max_error = maximum(abs.(Array(C_custom) .- Array(C_builtin)))
-    println("--- Result Accuracy Check ---")
-    println("Max absolute error: $max_error")
-end
-
-
-# Run everything
-benchmark_custom()
-benchmark_builtin()
-check_accuracy()
+main()
