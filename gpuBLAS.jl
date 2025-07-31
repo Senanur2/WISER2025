@@ -60,13 +60,14 @@ function main()
     println("Built-in cuBLAS multiply:")
     println("  Time: $(round(built_in_time*1000, digits=3)) ms")
     println("  Performance: $(round(built_in_gflops, digits=2)) GFLOP/s")
-    println("Naive element-wise kernel multiply:")
+    println("  element-wise kernel multiply:")
     println("  Time: $(round(naive_time*1000, digits=3)) ms")
     println("  Performance: $(round(naive_gflops, digits=2)) GFLOP/s")
 
-    # Optionally verify correctness
+
     max_error = maximum(abs.(Array(C_built_in) .- Array(C_naive)))
     println("Max absolute error between results: $max_error")
+    println("Using GPU: ", CUDA.device())
 end
 
 main()
