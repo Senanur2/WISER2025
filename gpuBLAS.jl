@@ -10,13 +10,15 @@ end
 n = parse(Int, ARGS[1])
 tile_size = parse(Int, ARGS[2])
 
+# Allocate GPU matrices
 A = CUDA.randn(Float32, n, n)
 B = CUDA.randn(Float32, n, n)
 C_tile = CUDA.zeros(Float32, n, n)
 C_gpu = CUDA.zeros(Float32, n, n)
 
+# Tile matrix multiplication using sub-blocks
 function tile_gpu_multiply!(C, A, B, tile_size)
-    fill!(C, 0.0f0)  # Optional if you set β = 0.0 below
+    fill!(C, 0.0f0)
     n = size(A, 1)
     for ii in 1:tile_size:n, jj in 1:tile_size:n, kk in 1:tile_size:n
         i_max = min(ii + tile_size - 1, n)
@@ -31,13 +33,20 @@ function tile_gpu_multiply!(C, A, B, tile_size)
     end
 end
 
-# Benchmark
-t_tile = @benchmark CUDA.@sync tile_gpu_multiply!($C_tile, $A, $B, $tile_size) samples=5
-t_gpu = @benchmark CUDA.@sync mul!($C_gpu, $A, $B) samples=5
+# Warm-up (compile and run once)
+CUDA.@sync tile_gpu_multiply!(C_tile, A, B, tile_size)
+CUDA.@sync mul!(C_gpu, A, B)
 
-# Metrics
-avg_time_tile = mean(t_tile).time / 1e6
-avg_time_gpu = mean(t_gpu).time / 1e6
+# Benchmark both 
+t_tile = @benchmarkable CUDA.@sync tile_gpu_multiply!($C_tile, $A, $B, $tile_size) samples=10
+t_gpu  = @benchmarkable CUDA.@sync mul!($C_gpu, $A, $B) samples=10
+
+t_tile = run(t_tile)
+t_gpu  = run(t_gpu)
+
+# Compute performance
+avg_time_tile = mean(t_tile).time / 1e6  # ms
+avg_time_gpu = mean(t_gpu).time / 1e6    # ms
 flops = 2 * n^3
 gflops_tile = flops / (avg_time_tile * 1e6)
 gflops_gpu = flops / (avg_time_gpu * 1e6)
@@ -47,13 +56,14 @@ println("GPU Matrix Multiplication Comparison")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size\n")
 
-println("Tile GPU:")
+println("Tile (Manual):")
 println("  Time: $(round(avg_time_tile, digits=2)) ms")
 println("  Performance: $(round(gflops_tile, digits=2)) GFLOP/s\n")
 
-println("GPU Tile Built-in: ")
+println("Built-in Tile:")
 println("  Time: $(round(avg_time_gpu, digits=2)) ms")
 println("  Performance: $(round(gflops_gpu, digits=2)) GFLOP/s\n")
 
-println("--- Result Accuracy Check (isapprox) ---")
-println("Manual Tile ≈ TileBuilt-in?     ", isapprox(C_tile, C_gpu; rtol=1e-4, atol=1e-6))
+# Accuracy check
+println("Result Accuracy Check (isapprox)")
+println("Tile ≈ Built-in?     ", isapprox(C_tile, C_gpu; rtol=1e-4, atol=1e-6))
