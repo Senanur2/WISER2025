@@ -52,6 +52,7 @@ end
 # Benchmarking the Built-in `mul!`
 function benchmark_builtin()
     t = @elapsed CUDA.@sync begin
+        println(typeof(C_builtin))
         mul!(C_builtin, A, B)
     end
     gflops = 2.0 * M * N * K / t / 1e9
