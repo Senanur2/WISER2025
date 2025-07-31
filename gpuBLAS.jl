@@ -1,5 +1,6 @@
 using CUDA
 using BenchmarkTools
+using LinearAlgebra
 
 # Custom matrix multiplication kernel
 function matmul_kernel(A, B, C, M, N, K)
