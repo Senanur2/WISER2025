@@ -1,5 +1,3 @@
-
-
 using LinearAlgebra
 using BenchmarkTools
 using Base.Threads
@@ -17,15 +15,13 @@ thread_count = parse(Int, ARGS[3])
 # Set BLAS threads
 BLAS.set_num_threads(thread_count)
 
-
 A = randn(n, n)
 B = randn(n, n)
 C_tile = zeros(n, n)
 C_blas = zeros(n, n)
 
-
 function threaded_tile_multiply!(C, A, B, tile_size)
-  fill!(C, 0.0)
+    fill!(C, 0.0)
     n = size(A, 1)
     Threads.@threads for ii in 1:tile_size:n
         for jj in 1:tile_size:n
@@ -46,24 +42,25 @@ function threaded_tile_multiply!(C, A, B, tile_size)
     end
 end
 
-
-
-
 function gflops(n, time_s)
     flops = 2 * n^3
     return flops / (time_s * 1e9)
 end
 
-tile_time = @elapsed threaded_tile_multiply!(C_tile, A, B, tile_size)
+# Benchmark tile
+r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
+tile_time = minimum(r_tile).time / 1e9  # ns to sec
 tile_gflops = gflops(n, tile_time)
 
-blas_time = @elapsed mul!(C_blas, A, B)
+# Benchmark BLAS
+r_blas = @benchmark mul!($C_blas, $A, $B) samples=5 evals=1
+blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
+# Accuracy check
 max_diff = maximum(abs.(C_tile .- C_blas))
 
-
-
+# Results
 println("  Matrix Multiplication Comparison  ")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size")
@@ -79,4 +76,3 @@ println("  Performance: $(round(blas_gflops, digits=2)) GFLOP/s\n")
 
 println("Accuracy Check")
 println("Max absolute difference: $max_diff")
-
