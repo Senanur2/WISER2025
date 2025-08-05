@@ -36,7 +36,7 @@ function gpu_tile_kernel(C, A, B, N, tile_size)
     col = (blockIdx().x - 1) * blockDim().x + threadIdx().x
 
     if row <= N && col <= N
-        acc = 0.0f0
+        acc = Float16(0)
         for kk in 1:tile_size:N
             k_max = min(kk + tile_size - 1, N)
             for k in kk:k_max
