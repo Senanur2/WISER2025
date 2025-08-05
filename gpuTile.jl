@@ -17,16 +17,16 @@ gpu_index = length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 0
 CUDA.device!(gpu_index)
 println("Using GPU: ", CUDA.device())
 
-const T = Float16
+
 
 # Data Setup
-A = rand(T, n, n)
-B = rand(T, n, n)
+A = rand(Float64, n, n)
+B = rand(Float64, n, n)
 
 dA = CuArray(A)
 dB = CuArray(B)
-dC_tile = CuArray(zeros(T, n, n))
-dC_blas = CuArray(zeros(T, n, n))
+dC_tile = CuArray(zeros(Float64, n, n))
+dC_blas = CuArray(zeros(Float64, n, n))
 
 
 # Tile-based GPU Kernel
@@ -78,7 +78,7 @@ tile_gflops = gflops(n, tile_time)
 
 # Run cuBLAS gemm
 r_blas = @benchmark begin
-    CUDA.CUBLAS.gemm!('N', 'N', one(T), dA, dB, zero(T), dC_blas)
+    CUDA.CUBLAS.gemm!('N', 'N', Float64(1.0), dA, dB, Float64(0.0), dC_blas)
     synchronize()
 end samples=5 evals=1
 
