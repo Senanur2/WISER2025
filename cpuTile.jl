@@ -2,6 +2,7 @@ using LinearAlgebra
 using BenchmarkTools
 using Base.Threads
 using Statistics
+using LinearAlgebra.BLAS
 
 if length(ARGS) < 3
     println("Usage: julia benchmark.jl <matrix_size> <tile_size> <thread_count>")
@@ -53,7 +54,7 @@ tile_time = minimum(r_tile).time / 1e9  # ns to sec
 tile_gflops = gflops(n, tile_time)
 
 # Benchmark BLAS
-r_blas = @benchmark mul!($C_blas, $A, $B) samples=5 evals=1
+r_blas = @benchmark gemm!('N', 'N', 1.0, A, B, 0.0, C_blas) samples=5 evals=1
 blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
