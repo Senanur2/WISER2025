@@ -77,7 +77,7 @@ tile_gflops = gflops(n, tile_time)
 # Run cuBLAS gemm
 
 r_blas = @benchmark begin
-    CUDA.CUBLAS.gemm!('N', 'N', Float16(1.0), dA, dB, Float16(0.0), dC_blas)
+    CUDA.CUBLAS.gemm!('N', 'N', Float32(1.0), dA, dB, Float32(0.0), dC_blas)
     synchronize()
 end samples=5 evals=1
 
