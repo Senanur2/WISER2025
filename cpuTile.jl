@@ -23,8 +23,8 @@ C_blas = zeros(n, n)
 function threaded_tile_multiply!(C, A, B, tile_size)
     fill!(C, 0.0)
     n = size(A, 1)
- Threads.@threads for ii in 1:tile_size:n
-        for jj in 1:tile_size:n
+ for ii in 1:tile_size:n
+  Threads.@threads for jj in 1:tile_size:n
             for kk in 1:tile_size:n
                 i_max = min(ii+tile_size-1, n)
                 j_max = min(jj+tile_size-1, n)
