@@ -17,7 +17,7 @@ gpu_index = length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 0
 CUDA.device!(gpu_index)
 println("Using GPU: ", CUDA.device())
 
-T = Float16
+const T = Float16
 
 # Data Setup
 A = rand(T, n, n)
