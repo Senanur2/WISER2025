@@ -3,19 +3,21 @@ using Statistics
 using BenchmarkTools
 using LinearAlgebra
 
-
 # Command-line Arguments
-
 if length(ARGS) < 2
-    println("Usage: julia gpu_tile_benchmark.jl <matrix_size> <tile_size>")
+    println("Usage: julia gpu_tile_benchmark.jl <matrix_size> <tile_size> [gpu_index]")
     exit(1)
 end
 
 n = parse(Int, ARGS[1])
 tile_size = parse(Int, ARGS[2])
+gpu_index = length(ARGS) >= 3 ? parse(Int, ARGS[3]) : 0
+
+# Select GPU
+CUDA.device!(gpu_index)
+println("Using GPU: ", CUDA.device())
 
 # Data Setup
-
 A = rand(Float32, n, n)
 B = rand(Float32, n, n)
 
