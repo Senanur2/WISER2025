@@ -29,7 +29,7 @@ dC_blas = CuArray(zeros(Float32, n, n))
 
 function gpu_tile_kernel(C, A, B, N, tile_size)
     row = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-@@ -61,26 +61,26 @@
+
 tile_gflops = gflops(n, tile_time)
 
 r_blas = @benchmark begin
