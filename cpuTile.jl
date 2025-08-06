@@ -15,11 +15,14 @@ thread_count = parse(Int, ARGS[3])
 # Set BLAS threads
 BLAS.set_num_threads(thread_count)
 
+# Matrix initialization
 A = randn(n, n)
 B = randn(n, n)
 C_tile = zeros(n, n)
 C_blas = zeros(n, n)
+C_builtin = zeros(n, n)
 
+# Tiled multiply using BLAS.gemm!
 function threaded_tile_multiply!(C, A, B, tile_size)
     fill!(C, 0.0)
     n = size(A, 1)
@@ -31,12 +34,10 @@ function threaded_tile_multiply!(C, A, B, tile_size)
                 j_max = min(jj + tile_size - 1, n)
                 k_max = min(kk + tile_size - 1, n)
 
-                # Define submatrices for tile blocks
                 A_tile = @view A[ii:i_max, kk:k_max]
                 B_tile = @view B[kk:k_max, jj:j_max]
                 C_tile = @view C[ii:i_max, jj:j_max]
 
-                # Perform matrix multiplication using BLAS
                 BLAS.gemm!('N', 'N', 1.0, A_tile, B_tile, 1.0, C_tile)
             end
         end
@@ -48,20 +49,28 @@ function gflops(n, time_s)
     return flops / (time_s * 1e9)
 end
 
-# Benchmark tile
+# ───── Benchmarks ─────
+
+# 1. Tile
 r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
-tile_time = minimum(r_tile).time / 1e9  # ns to sec
+tile_time = minimum(r_tile).time / 1e9
 tile_gflops = gflops(n, tile_time)
 
-# Benchmark BLAS
+# 2. BLAS
 r_blas = @benchmark gemm!('N', 'N', 1.0, A, B, 0.0, C_blas) samples=5 evals=1
 blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
-# Accuracy check
-max_diff = maximum(abs.(C_tile .- C_blas))
+# 3. Built-in
+r_builtin = @benchmark $C_builtin = $A * $B samples=5 evals=1
+builtin_time = minimum(r_builtin).time / 1e9
+builtin_gflops = gflops(n, builtin_time)
 
-# Results
+# ───── Accuracy Checks ─────
+diff_tile_blas = maximum(abs.(C_tile .- C_blas))
+diff_builtin_blas = maximum(abs.(C_builtin .- C_blas))
+
+# ───── Output ─────
 println("  Matrix Multiplication Comparison  ")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size")
@@ -71,9 +80,14 @@ println("Threaded Tile Multiply:")
 println("  Time: $(round(tile_time * 1000, digits=2)) ms")
 println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s\n")
 
-println("BLAS mul!(C, A, B):")
+println("BLAS gemm!(C, A, B):")
 println("  Time: $(round(blas_time * 1000, digits=2)) ms")
 println("  Performance: $(round(blas_gflops, digits=2)) GFLOP/s\n")
 
-println("Accuracy Check")
-println("Max absolute difference: $max_diff")
+println("Built-in A * B:")
+println("  Time: $(round(builtin_time * 1000, digits=2)) ms")
+println("  Performance: $(round(builtin_gflops, digits=2)) GFLOP/s\n")
+
+println("Accuracy Check (vs BLAS):")
+println("  Max difference (Tile vs BLAS): $diff_tile_blas")
+println("  Max difference (Built-in vs BLAS): $diff_builtin_blas")
