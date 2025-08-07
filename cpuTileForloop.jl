@@ -1,0 +1,63 @@
+# tile_multiplication.jl
+using BenchmarkTools
+using Base.Threads
+using Statistics
+using LinearAlgebra.BLAS
+
+if length(ARGS) < 3
+    println("Usage: julia tile_multiplication.jl <matrix_size> <tile_size> <thread_count>")
+    exit(1)
+end
+
+n = parse(Int, ARGS[1])
+tile_size = parse(Int, ARGS[2])
+thread_count = parse(Int, ARGS[3])
+
+# Set BLAS threads
+BLAS.set_num_threads(thread_count)
+
+# Matrix initialization
+A = randn(n, n)
+B = randn(n, n)
+C_tile = zeros(n, n)
+C_blas = zeros(n, n)
+
+# Tiled multiply using BLAS.gemm!
+function threaded_tile_multiply!(C, A, B, tile_size)
+    fill!(C, 0.0)
+    n = size(A, 1)
+
+    Threads.@threads for ii in 1:tile_size:n
+        for jj in 1:tile_size:n
+            for kk in 1:tile_size:n
+                i_max = min(ii + tile_size - 1, n)
+                j_max = min(jj + tile_size - 1, n)
+                k_max = min(kk + tile_size - 1, n)
+
+                A_tile = @view A[ii:i_max, kk:k_max]
+                B_tile = @view B[kk:k_max, jj:j_max]
+                C_tile = @view C[ii:i_max, jj:j_max]
+
+                BLAS.gemm!('N', 'N', 1.0, A_tile, B_tile, 1.0, C_tile)
+            end
+        end
+    end
+end
+
+function gflops(n, time_s)
+    flops = 2 * n^3
+    return flops / (time_s * 1e9)
+end
+
+# ───── Benchmark ─────
+r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
+tile_time = minimum(r_tile).time / 1e9
+tile_gflops = gflops(n, tile_time)
+
+# ───── Output ─────
+println("Threaded Tile Multiply:")
+println("  Matrix size: $n x $n")
+println("  Tile size: $tile_size")
+println("  Threads used: $thread_count")
+println("  Time: $(round(tile_time * 1000, digits=2)) ms")
+println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s")
