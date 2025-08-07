@@ -11,7 +11,7 @@ end
 n = parse(Int, ARGS[1])
 thread_count = parse(Int, ARGS[2])
 
-# Set BLAS threads
+# Set BLAS thread count
 BLAS.set_num_threads(thread_count)
 
 # Matrix initialization
@@ -24,12 +24,12 @@ function gflops(n, time_s)
     return flops / (time_s * 1e9)
 end
 
-# ───── Benchmark ─────
+# Benchmark BLAS gemm!
 r_blas = @benchmark gemm!('N', 'N', 1.0, A, B, 0.0, C_blas) samples=5 evals=1
 blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
-# ───── Output ─────
+# Output
 println("BLAS gemm!(C, A, B):")
 println("  Matrix size: $n x $n")
 println("  Threads used: $thread_count")
