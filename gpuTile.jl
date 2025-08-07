@@ -42,13 +42,7 @@ function tile_multiply!(C, A, B, tile_size)
                 B_tile = @view B[kk:k_max, jj:j_max]
                 C_tile_view = @view C[ii:i_max, jj:j_max]
 
-                CUDA.CUBLAS.gemm!(
-                    'N', 'N',
-                    1.0f0,
-                    A_tile, B_tile,
-                    1.0f0,
-                    C_tile_view
-                )
+                CUDA.CUBLAS.gemm!('N', 'N',1.0f0, A_tile, B_tile, 1.0f0,C_tile_view)
             end
         end
     end
