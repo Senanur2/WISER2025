@@ -24,7 +24,6 @@ C_blas = CUDA.zeros(Float32, n, n)
 
 dC_blas = similar(C_blas)
 
-# Tiled multiply using CUBLAS
 function tile_multiply!(C, A, B, tile_size)
     fill!(C, 0.0f0)
     n = size(A, 1)
@@ -40,8 +39,7 @@ function tile_multiply!(C, A, B, tile_size)
                 B_tile = @view B[kk:k_max, jj:j_max]
                 C_tile_view = @view C[ii:i_max, jj:j_max]
 
-                CUDA.CUBLAS.gemm!('N', 'N',1.0f0, A_tile, B_tile, 1.0f0,C_tile_view)
-                
+                CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, A_tile, B_tile, 1.0f0, C_tile_view)
             end
         end
     end
@@ -52,32 +50,35 @@ function gflops(n, time_s)
     return flops / (time_s * 1e9)
 end
 
-
 fill!(dC_blas, 0.0f0)
 fill!(C_builtin, 0.0f0)
 
 # ───── Benchmarks ─────
 
-# 1. Tile
-r_tile = @benchmark tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
+println("\nProfiling Tile Multiply (on GPU)...")
+r_tile = CUDA.@profile begin
+    @benchmark tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
+end
 tile_time = minimum(r_tile).time / 1e9
 tile_gflops = gflops(n, tile_time)
 
-# 2. BLAS
-r_blas = @benchmark begin
-    CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $A, $B, 0.0f0, $dC_blas)
-    synchronize()
-end samples=5 evals=1
-
+println("\nProfiling BLAS gemm! (on GPU)...")
+r_blas = CUDA.@profile begin
+    @benchmark begin
+        CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $A, $B, 0.0f0, $dC_blas)
+        synchronize()
+    end samples=5 evals=1
+end
 blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
-# 3. Built-in
-r_builtin = @benchmark begin
-    $C_builtin .= $A * $B
-    synchronize()
-end samples=5 evals=1
-
+println("\nProfiling Built-in A * B (on GPU)...")
+r_builtin = CUDA.@profile begin
+    @benchmark begin
+        $C_builtin .= $A * $B
+        synchronize()
+    end samples=5 evals=1
+end
 builtin_time = minimum(r_builtin).time / 1e9
 builtin_gflops = gflops(n, builtin_time)
 
@@ -86,7 +87,7 @@ diff_tile_blas = maximum(abs.(Array(C_tile) .- Array(dC_blas)))
 diff_builtin_blas = maximum(abs.(Array(C_builtin) .- Array(dC_blas)))
 
 # ───── Output ─────
-println("  Matrix Multiplication Comparison  ")
+println("\n  Matrix Multiplication Comparison  ")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size")
 
