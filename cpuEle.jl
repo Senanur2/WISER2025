@@ -1,22 +1,24 @@
 using BenchmarkTools
 using Base.Threads
 using Statistics
-using LinearAlgebra.BLAS
 
-if length(ARGS) < 3
-    println("Usage: julia benchmark.jl <matrix_size> <tile_size> <thread_count>")
+if length(ARGS) < 2
+    println("Usage: julia benchmark.jl <matrix_size> <thread_count>")
     exit(1)
 end
 
 n = parse(Int, ARGS[1])
-tile_size = parse(Int, ARGS[2])
-thread_count = parse(Int, ARGS[3])
+thread_count = parse(Int, ARGS[2])
 
+# Make sure to start Julia with JULIA_NUM_THREADS=thread_count
+println("Using $thread_count threads (JULIA_NUM_THREADS environment variable)")
 
 A = randn(n, n)
 B = randn(n, n)
 C_tile = zeros(n, n)
-C_blas = zeros(n, n)
+
+# You can keep tile_size fixed or pick a default inside the code
+const tile_size = 256  # or any fixed number you want
 
 function threaded_tile_multiply!(C, A, B, tile_size)
     fill!(C, 0.0)
@@ -51,27 +53,11 @@ r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples
 tile_time = minimum(r_tile).time / 1e9  # ns to sec
 tile_gflops = gflops(n, tile_time)
 
-# Benchmark BLAS (uses BLAS threads set externally)
-r_blas = @benchmark gemm!('N', 'N', 1.0, A, B, 0.0, C_blas) samples=5 evals=1
-blas_time = minimum(r_blas).time / 1e9
-blas_gflops = gflops(n, blas_time)
-
-# Accuracy check
-max_diff = maximum(abs.(C_tile .- C_blas))
-
-# Results
-println("  Matrix Multiplication Comparison  ")
+println("  Matrix Multiplication (Tile-wise)  ")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size")
-println("Threads used (element-wise): $thread_count\n")
+println("Threads used (from JULIA_NUM_THREADS): $thread_count\n")
 
 println("Threaded Tile Multiply:")
 println("  Time: $(round(tile_time * 1000, digits=2)) ms")
-println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s\n")
-
-println("BLAS mul!(C, A, B):")
-println("  Time: $(round(blas_time * 1000, digits=2)) ms")
-println("  Performance: $(round(blas_gflops, digits=2)) GFLOP/s\n")
-
-println("Accuracy Check")
-println("Max absolute difference: $max_diff")
+println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s")
