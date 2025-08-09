@@ -1,5 +1,6 @@
 using BenchmarkTools
 using Base.Threads
+using LinearAlgebra.BLAS
 
 if length(ARGS) < 1
     println("Usage: julia benchmark.jl <matrix_size>")
@@ -9,6 +10,10 @@ end
 n = parse(Int, ARGS[1])
 thread_count = Threads.nthreads()
 println("Threads detected from JULIA_NUM_THREADS: $thread_count")
+
+# Set BLAS threads to match Julia threads to avoid oversubscription
+BLAS.set_num_threads(thread_count)
+println("BLAS threads set to: ", BLAS.get_num_threads())
 
 # Initialize matrices as Float64 explicitly
 A = randn(Float64, n, n)
