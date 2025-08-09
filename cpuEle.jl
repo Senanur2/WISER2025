@@ -3,14 +3,18 @@ using Base.Threads
 using Statistics
 using LinearAlgebra.BLAS
 
-if length(ARGS) < 3
-    println("Usage: julia benchmark.jl <matrix_size> <tile_size> <thread_count>")
+if length(ARGS) < 2
+    println("Usage: julia benchmark.jl <matrix_size> <tile_size>")
     exit(1)
 end
 
 n = parse(Int, ARGS[1])
 tile_size = parse(Int, ARGS[2])
-thread_count = parse(Int, ARGS[3])
+
+thread_count = Threads.nthreads()  # get thread count from JULIA_NUM_THREADS env var
+println("Threads detected from JULIA_NUM_THREADS: $thread_count")
+
+BLAS.set_num_threads(thread_count)
 
 # Set BLAS threads
 BLAS.set_num_threads(thread_count)
