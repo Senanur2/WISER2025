@@ -7,15 +7,14 @@ if length(ARGS) < 1
 end
 
 n = parse(Int, ARGS[1])
-
 thread_count = Threads.nthreads()
 println("Threads detected from JULIA_NUM_THREADS: $thread_count")
 
-# Initialize matrices
-A = randn(n, n)
-B = randn(n, n)
-C_elem = zeros(n, n)
-C_builtin = zeros(n, n)
+# Initialize matrices as Float64 explicitly
+A = randn(Float64, n, n)
+B = randn(Float64, n, n)
+C_elem = zeros(Float64, n, n)
+C_builtin = zeros(Float64, n, n)
 
 # Threaded element-wise multiply
 function threaded_elementwise_multiply!(C, A, B)
@@ -32,8 +31,19 @@ function gflops_elementwise(n, time_s)
     return flops / (time_s * 1e9)
 end
 
+# Ensure C_elem is zeroed before each manual run to avoid stale data
+function run_manual_elementwise!(C, A, B)
+    fill!(C, 0.0)
+    threaded_elementwise_multiply!(C, A, B)
+end
+
+# Run manual threaded multiply once to validate accuracy without benchmark noise
+run_manual_elementwise!(C_elem, A, B)
+max_diff_pre = maximum(abs.(C_elem .- (A .* B)))
+println("Initial accuracy check (before benchmarking): max diff = $max_diff_pre")
+
 # Benchmark manual threaded element-wise multiply
-r_elem = @benchmark threaded_elementwise_multiply!($C_elem, $A, $B) samples=5 evals=1
+r_elem = @benchmark run_manual_elementwise!($C_elem, $A, $B) samples=5 evals=1
 elem_time = minimum(r_elem).time / 1e9
 elem_gflops = gflops_elementwise(n, elem_time)
 
@@ -42,11 +52,10 @@ r_builtin_elem = @benchmark $C_builtin = $A .* $B samples=5 evals=1
 builtin_elem_time = minimum(r_builtin_elem).time / 1e9
 builtin_elem_gflops = gflops_elementwise(n, builtin_elem_time)
 
-# Accuracy check between manual and built-in
-diff_elem = maximum(abs.(C_elem .- C_builtin))
+# Accuracy check after benchmarking manual threaded multiply
+max_diff_post = maximum(abs.(C_elem .- C_builtin))
 
-# Output
-println("Element-wise Multiplication Benchmark")
+println("\nElement-wise Multiplication Benchmark")
 println("Matrix size: $n x $n")
 println("Threads used: $thread_count\n")
 
@@ -58,5 +67,6 @@ println("Built-in Element-wise Multiply:")
 println("  Time: $(round(builtin_elem_time*1000, digits=2)) ms")
 println("  Performance: $(round(builtin_elem_gflops, digits=2)) GFLOP/s\n")
 
-println("Accuracy Check (Manual vs Built-in):")
-println("  Max difference: $diff_elem")
+println("Accuracy Checks:")
+println("  Initial max difference (manual vs built-in): $max_diff_pre")
+println("  Post-benchmark max difference (manual vs built-in): $max_diff_post")
