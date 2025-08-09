@@ -1,77 +1,79 @@
 using BenchmarkTools
 using Base.Threads
+using Statistics
 using LinearAlgebra.BLAS
 
-if length(ARGS) < 1
-    println("Usage: julia benchmark.jl <matrix_size>")
+if length(ARGS) < 3
+    println("Usage: julia benchmark.jl <matrix_size> <tile_size> <thread_count>")
     exit(1)
 end
 
 n = parse(Int, ARGS[1])
-thread_count = Threads.nthreads()
-println("Threads detected from JULIA_NUM_THREADS: $thread_count")
+tile_size = parse(Int, ARGS[2])
+thread_count = parse(Int, ARGS[3])
 
-# Set BLAS threads to match Julia threads to avoid oversubscription
+# Set BLAS threads
 BLAS.set_num_threads(thread_count)
-println("BLAS threads set to: ", BLAS.get_num_threads())
 
-# Initialize matrices as Float64 explicitly
-A = randn(Float64, n, n)
-B = randn(Float64, n, n)
-C_elem = zeros(Float64, n, n)
-C_builtin = zeros(Float64, n, n)
+A = randn(n, n)
+B = randn(n, n)
+C_tile = zeros(n, n)
+C_blas = zeros(n, n)
 
-# Threaded element-wise multiply
-function threaded_elementwise_multiply!(C, A, B)
-    Threads.@threads for i in 1:size(A,1)
-        for j in 1:size(A,2)
-            C[i,j] = A[i,j] * B[i,j]
+function threaded_tile_multiply!(C, A, B, tile_size)
+    fill!(C, 0.0)
+    n = size(A, 1)
+
+     Threads.@threads for ii in 1:tile_size:n
+        for jj in 1:tile_size:n
+            for kk in 1:tile_size:n
+                i_max = min(ii+tile_size-1, n)
+                j_max = min(jj+tile_size-1, n)
+                k_max = min(kk+tile_size-1, n)
+
+            for i in ii:i_max
+                    for j in jj:j_max
+                        for k in kk:k_max
+                            C[i, j] += A[i, k] * B[k, j]
+                        end
+                    end
+                end
+            end
         end
     end
 end
 
-# GFLOPS calculation for element-wise multiply
-function gflops_elementwise(n, time_s)
-    flops = n^2  # only multiplications
+function gflops(n, time_s)
+    flops = 2 * n^3
     return flops / (time_s * 1e9)
 end
 
-# Ensure C_elem is zeroed before each manual run to avoid stale data
-function run_manual_elementwise!(C, A, B)
-    fill!(C, 0.0)
-    threaded_elementwise_multiply!(C, A, B)
-end
+# Benchmark element
+r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
+tile_time = minimum(r_tile).time / 1e9  # ns to sec
+tile_gflops = gflops(n, tile_time)
 
-# Run manual threaded multiply once to validate accuracy without benchmark noise
-run_manual_elementwise!(C_elem, A, B)
-max_diff_pre = maximum(abs.(C_elem .- (A .* B)))
-println("Initial accuracy check (before benchmarking): max diff = $max_diff_pre")
+# Benchmark BLAS
+r_blas = @benchmark gemm!('N', 'N', 1.0, A, B, 0.0, C_blas) samples=5 evals=1
+blas_time = minimum(r_blas).time / 1e9
+blas_gflops = gflops(n, blas_time)
 
-# Benchmark manual threaded element-wise multiply
-r_elem = @benchmark run_manual_elementwise!($C_elem, $A, $B) samples=5 evals=1
-elem_time = minimum(r_elem).time / 1e9
-elem_gflops = gflops_elementwise(n, elem_time)
+# Accuracy check
+max_diff = maximum(abs.(C_tile .- C_blas))
 
-# Benchmark built-in element-wise multiply
-r_builtin_elem = @benchmark $C_builtin = $A .* $B samples=5 evals=1
-builtin_elem_time = minimum(r_builtin_elem).time / 1e9
-builtin_elem_gflops = gflops_elementwise(n, builtin_elem_time)
-
-# Accuracy check after benchmarking manual threaded multiply
-max_diff_post = maximum(abs.(C_elem .- C_builtin))
-
-println("\nElement-wise Multiplication Benchmark")
+# Results
+println("  Matrix Multiplication Comparison  ")
 println("Matrix size: $n x $n")
+println("Tile size: $tile_size")
 println("Threads used: $thread_count\n")
 
-println("Manual Threaded Element-wise Multiply:")
-println("  Time: $(round(elem_time*1000, digits=2)) ms")
-println("  Performance: $(round(elem_gflops, digits=2)) GFLOP/s\n")
+println("Threaded Element Multiply:")
+println("  Time: $(round(tile_time * 1000, digits=2)) ms")
+println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s\n")
 
-println("Built-in Element-wise Multiply:")
-println("  Time: $(round(builtin_elem_time*1000, digits=2)) ms")
-println("  Performance: $(round(builtin_elem_gflops, digits=2)) GFLOP/s\n")
+println("BLAS:")
+println("  Time: $(round(blas_time * 1000, digits=2)) ms")
+println("  Performance: $(round(blas_gflops, digits=2)) GFLOP/s\n")
 
-println("Accuracy Checks:")
-println("  Initial max difference (manual vs built-in): $max_diff_pre")
-println("  Post-benchmark max difference (manual vs built-in): $max_diff_post")
+println("Accuracy Check")
+println("Max absolute difference: $max_diff")
