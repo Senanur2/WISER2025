@@ -1,6 +1,5 @@
 using BenchmarkTools
 using Base.Threads
-using Statistics
 
 if length(ARGS) < 2
     println("Usage: julia benchmark.jl <matrix_size> <thread_count>")
@@ -10,54 +9,59 @@ end
 n = parse(Int, ARGS[1])
 thread_count = parse(Int, ARGS[2])
 
-# Make sure to start Julia with JULIA_NUM_THREADS=thread_count
-println("Using $thread_count threads (JULIA_NUM_THREADS environment variable)")
+# Make sure to run Julia with correct threads:
+# JULIA_NUM_THREADS=thread_count julia benchmark.jl n thread_count
 
 A = randn(n, n)
 B = randn(n, n)
-C_tile = zeros(n, n)
+C_builtin = zeros(n, n)
+C_elementwise = zeros(n, n)
 
-# You can keep tile_size fixed or pick a default inside the code
-const tile_size = 256  # or any fixed number you want
-
-function threaded_tile_multiply!(C, A, B, tile_size)
-    fill!(C, 0.0)
-    n = size(A, 1)
-  
-    Threads.@threads for ii in 1:tile_size:n
-        for jj in 1:tile_size:n
-            for kk in 1:tile_size:n
-                i_max = min(ii+tile_size-1, n)
-                j_max = min(jj+tile_size-1, n)
-                k_max = min(kk+tile_size-1, n)
-
-                for i in ii:i_max
-                    for j in jj:j_max
-                        for k in kk:k_max
-                            C[i, j] += A[i, k] * B[k, j]
-                        end
-                    end
-                end
-            end
+# Element-wise for-loop multiply with threading
+function elementwise_forloop!(C, A, B)
+    @inbounds @threads for i in 1:size(A, 1)
+        for j in 1:size(A, 2)
+            C[i, j] = A[i, j] * B[i, j]
         end
     end
 end
 
-function gflops(n, time_s)
+# GFLOPS for matrix multiply (2 * n^3 FLOPs)
+function gflops_matrix(n, time_s)
     flops = 2 * n^3
     return flops / (time_s * 1e9)
 end
 
-# Benchmark tile
-r_tile = @benchmark threaded_tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
-tile_time = minimum(r_tile).time / 1e9  # ns to sec
-tile_gflops = gflops(n, tile_time)
+# GFLOPS for element-wise multiply (n^2 FLOPs)
+function gflops_elementwise(n, time_s)
+    flops = n^2
+    return flops / (time_s * 1e9)
+end
 
-println("  Matrix Multiplication (Tile-wise)  ")
+# Benchmarks
+
+r_builtin = @benchmark $C_builtin = $A * $B samples=5 evals=1
+builtin_time = minimum(r_builtin).time / 1e9
+builtin_gflops = gflops_matrix(n, builtin_time)
+
+r_elementwise_loop = @benchmark elementwise_forloop!($C_elementwise, $A, $B) samples=5 evals=1
+elementwise_time = minimum(r_elementwise_loop).time / 1e9
+elementwise_gflops = gflops_elementwise(n, elementwise_time)
+
+# Accuracy check
+diff_elementwise = maximum(abs.(C_elementwise .- (A .* B)))
+
+# Output
 println("Matrix size: $n x $n")
-println("Tile size: $tile_size")
-println("Threads used (from JULIA_NUM_THREADS): $thread_count\n")
+println("Threads used: $thread_count\n")
 
-println("Threaded Tile Multiply:")
-println("  Time: $(round(tile_time * 1000, digits=2)) ms")
-println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s")
+println("Built-in A * B:")
+println("  Time: $(round(builtin_time * 1000, digits=2)) ms")
+println("  Performance: $(round(builtin_gflops, digits=2)) GFLOP/s\n")
+
+println("Element-wise for-loop multiply:")
+println("  Time: $(round(elementwise_time * 1000, digits=2)) ms")
+println("  Performance: $(round(elementwise_gflops, digits=2)) GFLOP/s\n")
+
+println("Accuracy Check:")
+println("  Max difference (Element-wise vs .*): $diff_elementwise")
