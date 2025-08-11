@@ -31,7 +31,10 @@ function gflops(n, time_s)
 end
 
 fill!(dC_blas, 0.0f0)
-    
+
+println("Sleeping 10 seconds before running GPU multiplication to allow Nsight attach...")
+sleep(10) 
+
 r_blas = @benchmark CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $dA, $dB, 0.0f0, $dC_blas) samples=5 evals=1
 r_blas = @benchmark begin
     CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $A, $B, 0.0f0, $dC_blas)
