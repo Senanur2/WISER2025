@@ -18,32 +18,8 @@ println("Using GPU: ", CUDA.device())
 A = CUDA.randn(Float32, n, n)
 B = CUDA.randn(Float32, n, n)
 
-C_tile = CUDA.zeros(Float32, n, n)
-C_builtin = CUDA.zeros(Float32, n, n)
 C_blas = CUDA.zeros(Float32, n, n)
-
 dC_blas = similar(C_blas)
-
-function tile_multiply!(C, A, B, tile_size)
-    fill!(C, 0.0f0)
-    n = size(A, 1)
-
-    for ii in 1:tile_size:n
-        for jj in 1:tile_size:n
-            for kk in 1:tile_size:n
-                i_max = min(ii + tile_size - 1, n)
-                j_max = min(jj + tile_size - 1, n)
-                k_max = min(kk + tile_size - 1, n)
-
-                A_tile = @view A[ii:i_max, kk:k_max]
-                B_tile = @view B[kk:k_max, jj:j_max]
-                C_tile_view = @view C[ii:i_max, jj:j_max]
-
-                CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, A_tile, B_tile, 1.0f0, C_tile_view)
-            end
-        end
-    end
-end
 
 function gflops(n, time_s)
     flops = 2 * n^3
@@ -51,58 +27,21 @@ function gflops(n, time_s)
 end
 
 fill!(dC_blas, 0.0f0)
-fill!(C_builtin, 0.0f0)
+    
+r_blas = @benchmark CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $dA, $dB, 0.0f0, $dC_blas) samples=5 evals=1
+r_blas = @benchmark begin
+    CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $A, $B, 0.0f0, $dC_blas)
+    synchronize()
+end samples=5 evals=1
 
-# ───── Benchmarks ─────
-
-println("\nProfiling Tile Multiply (on GPU)...")
-r_tile = CUDA.@profile begin
-    @benchmark tile_multiply!($C_tile, $A, $B, $tile_size) samples=5 evals=1
-end
-tile_time = minimum(r_tile).time / 1e9
-tile_gflops = gflops(n, tile_time)
-
-println("\nProfiling BLAS gemm! (on GPU)...")
-r_blas = CUDA.@profile begin
-    @benchmark begin
-        CUDA.CUBLAS.gemm!('N', 'N', 1.0f0, $A, $B, 0.0f0, $dC_blas)
-        synchronize()
-    end samples=5 evals=1
-end
 blas_time = minimum(r_blas).time / 1e9
 blas_gflops = gflops(n, blas_time)
 
-println("\nProfiling Built-in A * B (on GPU)...")
-r_builtin = CUDA.@profile begin
-    @benchmark begin
-        $C_builtin .= $A * $B
-        synchronize()
-    end samples=5 evals=1
-end
-builtin_time = minimum(r_builtin).time / 1e9
-builtin_gflops = gflops(n, builtin_time)
 
-# ───── Accuracy Checks ─────
-diff_tile_blas = maximum(abs.(Array(C_tile) .- Array(dC_blas)))
-diff_builtin_blas = maximum(abs.(Array(C_builtin) .- Array(dC_blas)))
-
-# ───── Output ─────
-println("\n  Matrix Multiplication Comparison  ")
+println("  Matrix Multiplication Comparison  ")
 println("Matrix size: $n x $n")
 println("Tile size: $tile_size")
-
-println("Tiled Multiply (on GPU):")
-println("  Time: $(round(tile_time * 1000, digits=2)) ms")
-println("  Performance: $(round(tile_gflops, digits=2)) GFLOP/s\n")
 
 println("BLAS gemm! (on GPU):")
 println("  Time: $(round(blas_time * 1000, digits=2)) ms")
 println("  Performance: $(round(blas_gflops, digits=2)) GFLOP/s\n")
-
-println("Built-in A * B (on GPU):")
-println("  Time: $(round(builtin_time * 1000, digits=2)) ms")
-println("  Performance: $(round(builtin_gflops, digits=2)) GFLOP/s\n")
-
-println("Accuracy Check (vs BLAS):")
-println("  Max difference (Tile vs BLAS): $diff_tile_blas")
-println("  Max difference (Built-in vs BLAS): $diff_builtin_blas")
