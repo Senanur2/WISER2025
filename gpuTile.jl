@@ -19,7 +19,11 @@ A = CUDA.randn(Float32, n, n)
 B = CUDA.randn(Float32, n, n)
 
 C_blas = CUDA.zeros(Float32, n, n)
+
+dA = CuArray(A)
+dB = CuArray(B)
 dC_blas = similar(C_blas)
+
 
 function gflops(n, time_s)
     flops = 2 * n^3
